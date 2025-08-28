@@ -170,8 +170,8 @@ export class ReceiptService {
     }
 
     // Paso 7 EJecutar ejecutable de recnocimiento de recibo.
-    const stepOne = await runExecutable('python3', [
-      '/Users/luisdiaz/Documents/GitHub/PAS/RecognizeReceipts/src/recognizereceipt.py',
+    const stepOne = await runExecutable(process.env.ENVIRONMENT_PY || 'pyhthon3', [
+      process.env.ROUTE_EXECUTABLE_PY_RECOGNIZE_BANK!,
       fullPath,
       this.idNewReceipt
     ]);
@@ -200,8 +200,8 @@ export class ReceiptService {
     //Mejora: hacer que el pyton solo retorne mensajes concisos y leerlos en TS para saber mas rapido que banco y version es, o si no se puede procesar.
     
     // Paso 9 Ejecutar reconocimiento de monto. 
-    const stepTwo = await runExecutable('python3', [
-      '/Users/luisdiaz/Documents/GitHub/PAS/RecognizeReceipts/src/process_receipt_after_recognize.py',
+    const stepTwo = await runExecutable(process.env.ENVIRONMENT_PY  || 'python3', [
+      process.env.ROUTE_EXECUTABLE_PY_RECOGNIZE_AMOUNT!,
       fullPath,
       this.bank,
       this.version,
