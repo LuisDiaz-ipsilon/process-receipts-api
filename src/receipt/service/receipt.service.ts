@@ -130,7 +130,6 @@ export class ReceiptService {
           'extension,'+
           'route,'+
           'size,'+
-          'arrival_date,'+
           'width,'+
           'height'+
         ')'+
@@ -141,7 +140,6 @@ export class ReceiptService {
           '$4,'+
           '$5,'+
           '$6,'+
-          'CURRENT_DATE,'+
           '$7,'+
           '$8'+
         ') RETURNING id_receipt;',
@@ -170,8 +168,7 @@ export class ReceiptService {
     }
 
     // Paso 7 EJecutar ejecutable de recnocimiento de recibo.
-    const stepOne = await runExecutable(process.env.ENVIRONMENT_PY || 'pyhthon3', [
-      process.env.ROUTE_EXECUTABLE_PY_RECOGNIZE_BANK!,
+    const stepOne = await runExecutable(process.env.ROUTE_EXECUTABLE_PY_RECOGNIZE_BANK! || '', [
       fullPath,
       this.idNewReceipt
     ]);
@@ -200,8 +197,7 @@ export class ReceiptService {
     //Mejora: hacer que el pyton solo retorne mensajes concisos y leerlos en TS para saber mas rapido que banco y version es, o si no se puede procesar.
     
     // Paso 9 Ejecutar reconocimiento de monto. 
-    const stepTwo = await runExecutable(process.env.ENVIRONMENT_PY  || 'python3', [
-      process.env.ROUTE_EXECUTABLE_PY_RECOGNIZE_AMOUNT!,
+    const stepTwo = await runExecutable(process.env.ROUTE_EXECUTABLE_PY_RECOGNIZE_AMOUNT  || '', [
       fullPath,
       this.bank,
       this.version,
