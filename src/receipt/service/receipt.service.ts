@@ -176,7 +176,6 @@ export class ReceiptService {
         [idReceiptInserts, idClient, filename, 'jpg', fullPath, size, width, height],
       );
 
-      console.log('Affected rows insert new receipt:', resInsertReceipt.rowCount);
       this.idNewReceipt = resInsertReceipt.rows[0].id_receipt;
     } catch (error: any) {
       if (error.code === '23505') { //duplicate key value violates unique constraint "receipts_pkey"
@@ -207,24 +206,22 @@ export class ReceiptService {
       this.config.get<string>('DB_USER')!,
       this.config.get<string>('DB_PASS')!
     ]);
-    //console.log('Resultado recognizereceipt:', stepOne);
 
     // Paso 8 Leer resultado: banco y version del recibo.
     try{
-      const getBankNVersion = await this.db.pool.query(
-        'SELECT bank, version_bank '+
-        'FROM process_receipts.receipts_process '+
-        'WHERE id_receipt = $1 '+
-        'ORDER BY id_receipt_process DESC '+
-        'LIMIT 1;',
-        [this.idNewReceipt]
-      );
+      //Buscar en stepTwo un string que comience con RESULT:: y termine con ::END
+      //dentro tendra 2 valores separados por coma asi: RESULT::BBVA,2::END
+      const regex = /RESULT::([^,]+),([^:]+)::END/;
+      const match = stepOne.match(regex);
 
-      //No se encontro registro de recibo sobre process_receipt al buscar banco y version.
-      if (getBankNVersion.rows.length === 0) throw new InternalServerErrorException('Error en servidor contacte a soporte.');
+      if (!match) {
+        throw new Error('No se encontró banco o version');
+      }
 
-      this.bank = getBankNVersion.rows[0].bank;
-      this.version = getBankNVersion.rows[0].version_bank;
+      this.bank = match[1].trim();
+      this.version = match[2].trim();
+
+      if (!this.bank || !this.version) throw new Error('Error no se obtuvo banco o version.');
 
     } catch(error: any){
       console.error('Error inesperado al obtener banco y version del recibo:', error);
@@ -246,25 +243,22 @@ export class ReceiptService {
       this.config.get<string>('DB_PASS')!,
       this.config.get<string>('PATH_PROCESS_IMAGES')!
     ]);
-    //console.log('Resultado process_receipt_after_recognize:', stepTwo);
 
     // Paso 10 obtener el monto del recibo.
     try{
-      const getBankNVersion = await this.db.pool.query(
-        'SELECT id_receipt_process, mount_process '+
-        'FROM process_receipts.receipts_process '+
-        'WHERE id_receipt = $1 '+
-        'ORDER BY id_receipt_process DESC '+
-        'LIMIT 1;',
-        [this.idNewReceipt]
-      );
+      //Buscar en stepTwo un string que comience con AMOUNT:: y termine con ::END
+      //dentro tendra 2 valores separados por coma asi: AMOUNT::99,415.00::END
+      const regex = /AMOUNT::([^,]+),([^:]+)::END/;
+      const match = stepTwo.match(regex);
 
-      //No se encontro registro de recibo sobre process_receipt al buscar el monto
-      if (getBankNVersion.rows.length === 0) throw new InternalServerErrorException('Error en servidor contacte a soporte.');
+      if (!match) {
+        throw new Error('No se encontró registro de recibo sobre process_receipt al buscar el monto');
+      }
 
-      this.idReceiptProcess =  getBankNVersion.rows[0].id_receipt_process;
-      this.monto = getBankNVersion.rows[0].mount_process;
+      this.idReceiptProcess = match[1].trim();
+      this.monto = match[2].trim();
 
+      if (!this.monto || !this.idReceiptProcess ) throw new Error('Error no se tiene monto o id.');
     } catch(error: any){
       console.error('Error inesperado al obtener monto procesado:', error);
       throw new InternalServerErrorException('Error en servidor contacte a soporte.');

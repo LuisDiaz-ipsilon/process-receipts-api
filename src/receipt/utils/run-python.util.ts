@@ -18,7 +18,7 @@ export async function runExecutable(exePath: string, args: string[] = []): Promi
       console.error(`Error, STDERR de ${exePath}:`, stderr);
     }
 
-    //console.log(`PYTHON RESULT CONSOLE:${exePath}:`, stdout);
+    console.log(`PYTHON RESULT CONSOLE:${exePath}:`, stdout);
     return stdout.trim();
   } catch (error) {
     console.error(`Error ejecutando ${exePath}:`, error);
