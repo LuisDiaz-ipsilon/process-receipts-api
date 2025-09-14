@@ -200,7 +200,12 @@ export class ReceiptService {
     // Paso 7 EJecutar ejecutable de recnocimiento de recibo.
     const stepOne = await runExecutable(process.env.ROUTE_EXECUTABLE_PY_RECOGNIZE_BANK! || '', [
       fullPath,
-      this.idNewReceipt
+      this.idNewReceipt,
+      this.config.get<string>('DB_HOST')!,
+      this.config.get<string>('DB_PORT')!,
+      this.config.get<string>('DB_NAME')!,
+      this.config.get<string>('DB_USER')!,
+      this.config.get<string>('DB_PASS')!
     ]);
     //console.log('Resultado recognizereceipt:', stepOne);
 
@@ -233,7 +238,13 @@ export class ReceiptService {
       fullPath,
       this.bank,
       this.version,
-      this.idNewReceipt
+      this.idNewReceipt,
+      this.config.get<string>('DB_HOST')!,
+      this.config.get<string>('DB_PORT')!,
+      this.config.get<string>('DB_NAME')!,
+      this.config.get<string>('DB_USER')!,
+      this.config.get<string>('DB_PASS')!,
+      this.config.get<string>('PATH_PROCESS_IMAGES')!
     ]);
     //console.log('Resultado process_receipt_after_recognize:', stepTwo);
 
