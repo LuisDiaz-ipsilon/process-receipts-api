@@ -5,12 +5,12 @@
 
 CREATE TABLE process_receipts.receipts(
     id_receipt UUID PRIMARY KEY,
-    client INT NOT NULL, --DESPUES LLEVARA UNA REFERENCE
+    client uuid NOT NULL, --DESPUES LLEVARA UNA REFERENCE
     name VARCHAR(200)  NOT NULL,
     extension VARCHAR(8),
     route VARCHAR(200)  NOT NULL,
     size BIGINT  NOT NULL, --bytes
-    arrival_date DATE NOT NULL,
+    arrival_date timestamptz DEFAULT date_trunc('second', now()) NOT NULL,
     width INT NOT NULL,
     height INT NOT NULL
 );
