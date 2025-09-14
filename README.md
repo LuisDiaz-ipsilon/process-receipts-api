@@ -1,3 +1,9 @@
+RESULT::BBVA,2::END
+AMOUNT::99,415.00::END
+
+
+Build 2.0 12-09-2025 01:40 HRS
+
 <p align="center">
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>
