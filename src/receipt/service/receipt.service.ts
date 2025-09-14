@@ -1,10 +1,11 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DbService } from 'src/db.service';
 import imageSize from 'image-size';
 import { runExecutable } from '../utils/run-python.util';
+import { ISizeCalculationResult } from 'image-size/types/interface';
 
 
 /**
@@ -12,7 +13,7 @@ import { runExecutable } from '../utils/run-python.util';
  * Es necesario que el usuario use una credencial UUID que provee el departamento de ventas.
  * 
  * Pasos:
- * 1 Validar si el cliente existe
+ * 1 Validar si el cliente existe y longitud de clave.
  * 2 Validar si cliente tiene fichas
  * 3 Restar una ficha al cliente
  * 4 Registrar inicio de transaccion en DB
@@ -61,13 +62,32 @@ export class ReceiptService {
 
 
   async processReceipt(idClient: string, imageBase64: string) {
+
+    let nowFormatted : string;
+    let filename: string ;
+    let fullPath : string;
+    let buffer: Buffer;
+
+    let stats : fs.Stats;
+    let size : Number;                           
+
+    let bufferUnit8 : Buffer;
+    let dimensions : ISizeCalculationResult;
+    let width : any;
+    let height : any;
+
+    let idReceiptInserts: string;
+
     // Paso 1) validar si cliente existe
+    if (idClient.length !== 36){
+      throw new BadRequestException('Clave incorrecta');
+    }
     const clientRes = await this.db.pool.query(
       'SELECT 1 FROM business_receipts.clients WHERE id_client = $1',
       [idClient],
     );
     if (clientRes.rowCount === 0) {
-      throw new BadRequestException('Cliente no existe');
+      throw new BadRequestException('Clave incorrecta');
     }
 
     // Paso 2 validar si el cliente tiene fichas dispnibles
@@ -100,26 +120,36 @@ export class ReceiptService {
         [idClient]
       );
     } catch (error: any){
-      console.error('Error al registrar el inicio de transaccion en DB:', error);
+      console.error('Error al registrar el inicio de transaccion en DB:', error, 'Cliente'+idClient);
     }
 
     //Paso 5 guardar imagen en servidor
-    const nowFormatted = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
-    const filename = `${idClient}_${nowFormatted}.jpg`;
-    const fullPath = path.join(this.uploadDir, filename);
-    const buffer = this.decodeBase64Image(imageBase64);
-    fs.writeFileSync(fullPath, buffer);
+    try{
+      nowFormatted = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
+      filename = `${idClient}_${nowFormatted}.jpg`;
+      fullPath = path.join(this.uploadDir, filename);
+      buffer = this.decodeBase64Image(imageBase64);
+      fs.writeFileSync(fullPath, buffer);
+    } catch (error: any){
+      console.error('Error al guardar la imagen del cliente: '+idClient+' Error: '+error)
+      throw new InternalServerErrorException('Error en servidor contacte a soporte.');
+    }
 
     // Paso 6 Guardar registro de recibo en DB.
-    const stats = fs.statSync(fullPath);
-    const size = Number(stats.size);                              
+    try{
+      stats = fs.statSync(fullPath);
+      size = Number(stats.size);                              
 
-    const bufferUnit8 = fs.readFileSync(fullPath);
-    const dimensions = imageSize(bufferUnit8); 
-    const width = dimensions.width ?? 0;
-    const height = dimensions.height ?? 0;
+      bufferUnit8 = fs.readFileSync(fullPath);
+      dimensions = imageSize(bufferUnit8); 
+      width = dimensions.width ?? 0;
+      height = dimensions.height ?? 0;
 
-    const idReceiptInserts: string = `${idClient}-${size}-${width}-${height}`;
+      idReceiptInserts = `${idClient}-${size}-${width}-${height}`;
+    } catch (error: any){
+      console.error('Error al obtener los datos de la imagen del cliente: '+idClient+' Error: '+error);
+      throw new InternalServerErrorException('Error en servidor contacte a soporte.');
+    }
 
     try{
       const resInsertReceipt = await this.db.pool.query(
@@ -163,7 +193,7 @@ export class ReceiptService {
         
       } else {
         console.error('Error inesperado al guardar imagen en DB:', error);
-        throw error;
+        throw new InternalServerErrorException('Error en servidor contacte a soporte.');
       }
     }
 
@@ -185,13 +215,15 @@ export class ReceiptService {
         [this.idNewReceipt]
       );
 
-      if (getBankNVersion.rows.length === 0) throw Error('No se encontro registro de recibo sobre process_receipt al buscar banco y version.');
+      //No se encontro registro de recibo sobre process_receipt al buscar banco y version.
+      if (getBankNVersion.rows.length === 0) throw new InternalServerErrorException('Error en servidor contacte a soporte.');
 
       this.bank = getBankNVersion.rows[0].bank;
       this.version = getBankNVersion.rows[0].version_bank;
 
     } catch(error: any){
       console.error('Error inesperado al obtener banco y version del recibo:', error);
+      throw new InternalServerErrorException('Error en servidor contacte a soporte.');
     }
 
     //Mejora: hacer que el pyton solo retorne mensajes concisos y leerlos en TS para saber mas rapido que banco y version es, o si no se puede procesar.
@@ -216,16 +248,16 @@ export class ReceiptService {
         [this.idNewReceipt]
       );
 
-      if (getBankNVersion.rows.length === 0) throw Error('No se encontro registro de recibo sobre process_receipt al buscar el monto.');
+      //No se encontro registro de recibo sobre process_receipt al buscar el monto
+      if (getBankNVersion.rows.length === 0) throw new InternalServerErrorException('Error en servidor contacte a soporte.');
 
       this.idReceiptProcess =  getBankNVersion.rows[0].id_receipt_process;
       this.monto = getBankNVersion.rows[0].mount_process;
 
     } catch(error: any){
       console.error('Error inesperado al obtener monto procesado:', error);
-      throw error;
+      throw new InternalServerErrorException('Error en servidor contacte a soporte.');
     }
-
     //Mejora: hacer que el pyton solo retorne mensajes concisos y leerlos en TS para saber mas rapido cual es el monto.
 
     // Paso 11 Registrar respuesta exitosa.
@@ -237,9 +269,10 @@ export class ReceiptService {
       );
     } catch (error: any){
       console.error('Error al registrar respuesta de transaccion en DB:', error);
+      throw new InternalServerErrorException('Error en servidor contacte a soporte.');
     }
 
     // Paso 12 retornar json a cliente.
-     return { monto: this.monto, file: filename };
+    return { monto: this.monto, file: filename };
   }
 }
