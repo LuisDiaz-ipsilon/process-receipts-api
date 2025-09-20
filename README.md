@@ -1,35 +1,73 @@
-RESULT::BBVA,2::END
-AMOUNT::99,415.00::END
-
-
-Build 2.0 12-09-2025 01:40 HRS
+@Author Luis Diaz  
+Build 1.0 20-09-2025 01:40 HRS  
 
 <p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
+  <a href="https://softwarefabrik.com.mx/" target="blank"><img src="public/images/logo-white.svg" width="480" alt="softwarefabrik Logo" /></a>
 </p>
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
+
+  <p align="center">Envia una captura de pantalla del comprobante y recibe el monto. Pruebala en <a href="https://recognize-receipts.softwarefabrik.com.mx/" target="_blank">Api</a>.</p>
     <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
-## Description
+## Tecnical Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Solo los clientes previamente registrados pueden transaccionar en la API.  
+Actualmente en la web se usa un id de cliente especifico y oculto.
+Es necesario que un nuevo cliente contacte a Softwarefabrik para generar una id client y usarlo en la peticion de reconocer comprobante.
+Actulmente solo se tiene un end point publicado que es <span style="color:orange; font-weight:bold">/process</span>.
+
+A continuacion se describira el proceso que pasa detras del metodo, asi como lo requerido para efectuarse y la arquitectura completa del desarollo.
+
+### Arquitectura
+
+NestJs ^ Python ^ PostgreSQL ^ Linux
+
+#### Base de datos
+
+Se tienen dos esquemas sobre base de datos 
+ - `business_receipts`
+ - `process_receipts`
+
+En el `business_receipts` se lleva el registro de clientes, las recargas de monedas/coins(intentos), transacciones que realizan (transaccion : 1 intento de reconocer imagen).
+
+Es necesario que el cliente tenga monedas disponibles para transaccionar.  
+Se recarga a un cliente manualmente por query sobre base de datos.  
+Se genera a un nuevo cliente manualmente por query sobre base de datos.  
+En la tabla transacciones el sistema NestJs escribe los intentos de reconocer la imagen y su respuesta.  
+Este esquema solo lo toca el backend con procesos automatizados o manualmente.  
+
+En process_receipts se encuentran los registros de las imagenes recibidas para procesar y el resultado del procesamiento de la imagen, se describe el banco, version y monto, ademas de las caracteristicas de la imagen, se diferencia cada imagen por un conjunto de datos:`<idClient>-<size>-<width>-<height>`, (ignorando los diamantes) se hashea con md5 y se convierte en un UUID, si se ingresan los mismos valores se generara el mismo uuid.
+
+#### Servicio
+
+Esta desarrollado en NestJS y Python, el serivcio solo tiene un metodo publico, es /process, este metodo recibe un id de cliente y una imagen en base 64, (consultar los recibos aceptados), se valida si el cliente existe, si tiene monedas, si es asi resta una de la cuenta del cliente y comienza registrando la transaccion sobre base de datos, guardando la imagen en el servidor con un titulo propio similar a: '1c06df3b-3eae-4bbf-9ea3-aa2b216b5d30_20250918045443.jpg' donde es el id de cliente y a la fecha actual a nivel segundo, el reconocimiento consta de dos pasos:
+
+- Step 1 Py: `recognizereceipt`
+- Step 2 Py: `process_receipt_after_recognize`
+
+Ambos son scripts compilados en python para reconocer la imagen en cuanto a banco y version de comprobante emitido por el banco, la version corresponde a tonalidades de color en la imagen, por ejemplo, si es BBVA version 1 en el archivo de documentacion se especifica que es la version usada por la aplicacion BBVA en el año 2024 en tono oscuro.  
+El segundo paso lee en base de datos el banco y version especificado para aplicar un algoritmo de procesamiento visual que recorta y delimita la zona donde se aplicara el OCR para reconocer el monto, por ultimo lo registra en la base de datos.  
+Ambos scripts escriben su resultado en la base de datos pero en el procesamiento para ahorrar tiempo devuelven un texto que es el print de consola de python que contiene en un formato los mismos datos escritos en base de datos; Ejemplo: 
+
+- <span style="color:red; font-weight:bold">RESULT::BBVA,2::END</span> (Especifica el banco y el numero de version separado por comas).  
+- <span style="color:red; font-weight:bold">AMOUNT::99,415.00::END</span> (Especifica el id de procesamiento en DB y el monto del comprobante).
+
+De esta manera se acelera la respuesta al cliente.
+
+Al finalzar se escirbre la respuesta de la transaccion un un codigo de 2 digitos:
+
+- 00: Reconocimiento exitoso.  
+- 01: Imagen duplicada.
+
+
+#### Servidor
+
+Se implementa Ubuntu 22, se utiliza pm2 en la Gestión de Servicios. Se instalo Tesseract OCR, OpenCV y Python.  
+Para el manejo de Archivos se usan rutas organizadas para procesamiento:  
+- /images-process → imágenes recibidas.  
+- /images-post-process → imágenes procesadas.
+
 
 ## Project setup
 
@@ -49,55 +87,6 @@ $ npm run start:dev
 # production mode
 $ npm run start:prod
 ```
-
-## Run tests
-
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
 
 ## License
 

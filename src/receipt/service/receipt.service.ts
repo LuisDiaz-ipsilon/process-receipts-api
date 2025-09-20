@@ -182,7 +182,7 @@ export class ReceiptService {
         try{
           await this.db.pool.query(
             'INSERT INTO business_receipts.transactions '+
-            '(id_client, code) VALUES ($1, \'01\');', //00 indica que la imagen ya se proceso antes
+            '(id_client, code) VALUES ($1, \'01\');', //duplicate key value violates unique constraint "receipts_pkey"
             [idClient]
           );
         } catch (error: any){
